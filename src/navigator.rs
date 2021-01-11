@@ -5,9 +5,10 @@ use std::{
     process::Child,
     rc::Rc,
     sync::Arc,
+    unreachable,
 };
 
-use druid::{widget::prelude::*, Selector, WidgetPod};
+use druid::{widget::prelude::*, Point, Selector, WidgetPod};
 
 use crate::{AppState, View};
 
@@ -58,76 +59,118 @@ use crate::{AppState, View};
 // Navigator will need to someway to keep track of the state of views so it
 // knows when to update the views or change to a new one depending on state changes
 pub struct Navigator {
-    views: Vec<WidgetPod<AppState, Box<dyn Widget<AppState>>>>,
-    // _data: PhantomData<T>,
+    state: Vec<WidgetPod<AppState, Box<dyn Widget<AppState>>>>,
+    views: HashMap<String, Box<dyn Fn() -> Box<dyn Widget<AppState>>>>,
 }
 
-// pub type ViewBuilder<T> = Box<dyn Fn() -> Box<dyn Widget<T>>>;
-
 impl Navigator {
-    // pub fn new<W: Widget<T> + 'static>(
     pub fn new(ui_builder: impl Fn() -> Box<dyn Widget<AppState> + 'static>) -> Self {
         let mut views = Vec::new();
-        // let current_view = Box::new((ui_builder)());
         let current_view = (ui_builder)();
         let current_view = WidgetPod::new(current_view);
         views.push(current_view);
         Self {
-            views,
-            // _data: PhantomData,
+            state: views,
+            views: HashMap::new(),
         }
     }
-    // pub fn add_view(&self, data: &T, widget: W) {
-    // pub fn add_view(&mut self, widget: impl Fn() -> Box<dyn Widget<T> + 'static>) {
+    pub fn with_view(
+        mut self,
+        name: String,
+        view_builder: impl Fn() -> Box<dyn Widget<AppState>> + 'static,
+    ) -> Self {
+        self.views.insert(name, Box::new(view_builder));
+        self
+    }
     pub fn add_view(&mut self, view: View) {
-        let new_view = (view.ui_builder)();
+        let ui_builder = self.views.get(&view.name).unwrap();
+        let new_view = (ui_builder)();
         let widget = WidgetPod::new(new_view);
-        self.views.push(widget);
+        self.state.push(widget);
+    }
+    pub fn pop_view(&mut self) {
+        if self.state.len() == 1 {
+            return;
+        }
+        self.state.pop().unwrap();
     }
 }
 pub trait ViewController {
-    // fn add_view<W: Data>(&mut self, widget: impl Fn() -> Box<dyn Widget<W> + 'static>);
-    fn add_view(&mut self, view: AppState);
-
-    fn current_view(&self) -> &AppState;
-    fn current_view_mut(&self) -> &mut AppState;
-    fn build_view(&self) -> WidgetPod<AppState, Box<dyn Widget<AppState>>>;
+    fn add_view(&mut self, view: View);
+    fn pop_view(&mut self);
+    fn current_view(&self) -> &View;
 }
 
-pub type ViewState = Arc<Vec<View>>;
-
-impl<V: ViewController + Data> Widget<V> for Navigator {
-    fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut V, env: &Env) {
-        // self.current_view.event(ctx, event, data, env);
-    }
-
-    fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, data: &V, env: &Env) {
-        if let LifeCycle::WidgetAdded = event {
-            // ctx.children_changed();
-            dbg!("widget added");
+impl Widget<AppState> for Navigator {
+    fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut AppState, env: &Env) {
+        if event.should_propagate_to_hidden() {
+            dbg!(
+                "event should propagate",
+                ctx.widget_id(),
+                self.state.last().unwrap().widget().id()
+            );
+            for view in self.state.iter_mut() {
+                view.event(ctx, event, data, env);
+            }
+        } else {
+            self.state.last_mut().unwrap().event(ctx, event, data, env);
         }
-        // self.views
-        //     .last_mut()
-        //     .unwrap()
-        //     .lifecycle(ctx, event, data, env)
     }
 
-    fn update(&mut self, ctx: &mut UpdateCtx, old_data: &V, data: &V, env: &Env) {
+    fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, data: &AppState, env: &Env) {
+        if event.should_propagate_to_hidden() {
+            dbg!("lifecycle event should propagate");
+            for view in self.state.iter_mut() {
+                view.lifecycle(ctx, event, data, env);
+            }
+        } else {
+            if let LifeCycle::WidgetAdded = event {
+                ctx.children_changed();
+                dbg!("widget added");
+            }
+            self.state
+                .last_mut()
+                .unwrap()
+                .lifecycle(ctx, event, data, env);
+        }
+    }
+
+    fn update(&mut self, ctx: &mut UpdateCtx, old_data: &AppState, data: &AppState, env: &Env) {
+        self.state.last_mut().unwrap().update(ctx, data, env);
         if !old_data.same(data) {
             dbg!("data changed");
+            if data.nav_state.len() > old_data.nav_state.len() {
+                self.add_view(data.nav_state.last().unwrap().clone());
+            } else if data.nav_state.len() < old_data.nav_state.len() {
+                self.pop_view();
+            } else {
+                unreachable!();
+            }
+            ctx.children_changed();
+            ctx.request_layout();
+            ctx.request_paint();
         }
         dbg!("data is same");
-        // self.views.last_mut().unwrap().update(ctx, data, env)
     }
 
-    fn layout(&mut self, ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &V, env: &Env) -> Size {
-        Size::new(0.0, 0.0)
-        // self.views.last_mut().unwrap().layout(ctx, bc, data, env)
+    fn layout(
+        &mut self,
+        ctx: &mut LayoutCtx,
+        bc: &BoxConstraints,
+        data: &AppState,
+        env: &Env,
+    ) -> Size {
+        dbg!("layouting", data.nav_state.last().unwrap());
+        let child_size = self.state.last_mut().unwrap().layout(ctx, bc, data, env);
+        self.state
+            .last_mut()
+            .unwrap()
+            .set_origin(ctx, data, env, Point::ZERO);
+        child_size
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx, data: &V, env: &Env) {
-        dbg!("painting");
-        // todo!()
-        // self.views.last_mut().unwrap().paint(ctx, data, env)
+    fn paint(&mut self, ctx: &mut PaintCtx, data: &AppState, env: &Env) {
+        dbg!("painting", data.nav_state.last().unwrap());
+        self.state.last_mut().unwrap().paint(ctx, data, env)
     }
 }
