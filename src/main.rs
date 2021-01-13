@@ -23,14 +23,14 @@ fn main() {
             email: "Billybob@gmail.com".to_string(),
             image: ImageBuf::empty(),
             favorite_food: "Curry".to_string(),
-            // age: 39,
+            age: 39,
         },
         Contact {
             name: "Waka waka".to_string(),
             email: "wakaka@gmail.com".to_string(),
             image: ImageBuf::empty(),
             favorite_food: "Fried Rice".to_string(),
-            // age: 65,
+            age: 65,
         },
     ];
     AppLauncher::with_window(window)
@@ -98,11 +98,30 @@ pub struct Contact {
     name: String,
     email: String,
     favorite_food: String,
-    // age: u8,
+    age: u32,
     image: ImageBuf,
 }
+impl Contact {
+    pub fn new(
+        name: impl Into<String>,
+        email: impl Into<String>,
+        age: u32,
+        favorite_food: impl Into<String>,
+    ) -> Self {
+        let name = name.into();
+        let email = email.into();
+        // let age = age.into();
+        let favorite_food = favorite_food.into();
+        Self {
+            name,
+            email,
+            favorite_food,
+            age,
+            image: ImageBuf::empty(),
+        }
+    }
+}
 
-// pub struct View<T: Data> {
 #[derive(Clone, Debug)]
 pub struct View {
     name: String,

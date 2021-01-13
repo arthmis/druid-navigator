@@ -78,6 +78,7 @@ pub trait ViewController {
 impl Widget<AppState> for Navigator {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut AppState, env: &Env) {
         if event.should_propagate_to_hidden() {
+            // dbg!("should propagate");
             for view in self.state.iter_mut() {
                 view.event(ctx, event, data, env);
             }
@@ -103,24 +104,21 @@ impl Widget<AppState> for Navigator {
     }
 
     fn update(&mut self, ctx: &mut UpdateCtx, old_data: &AppState, data: &AppState, env: &Env) {
-        // self.state.last_mut().unwrap().update(ctx, data, env);
-        // dbg!(old_data, data);
         if !old_data.same(data) {
-            // dbg!("data changed");
             if data.nav_state.len() > old_data.nav_state.len() {
                 if !(data.nav_state.last().unwrap().name == old_data.nav_state.last().unwrap().name)
                 {
                     self.push_view(data.nav_state.last().unwrap().clone());
+                    ctx.children_changed();
                 }
             } else if data.nav_state.len() < old_data.nav_state.len() {
                 self.pop_view();
+                ctx.children_changed();
+                self.state.last_mut().unwrap().update(ctx, data, env);
             } else {
+                ctx.children_changed();
             }
-            ctx.children_changed();
-        // ctx.request_layout();
-        // ctx.request_paint();
         } else {
-            // dbg!("data is same");
             self.state.last_mut().unwrap().update(ctx, data, env);
         }
     }

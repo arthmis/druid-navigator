@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{fmt::Debug, sync::Arc};
 
 use druid::{
     lens,
@@ -13,10 +13,7 @@ use druid::{
 use crate::{
     app_state_derived_lenses,
     navigator::{Navigator, ViewController},
-    // AppState, AppStateLens, AppStateLensBuilder, Contact, View,
-    AppState,
-    Contact,
-    View,
+    AppState, Contact, View,
 };
 
 pub fn contacts() -> Box<dyn Widget<AppState>> {
@@ -60,10 +57,8 @@ pub fn contacts() -> Box<dyn Widget<AppState>> {
                 ctx.fill(rect, &background_color);
             }))
         });
-    // .lens(AppState::contacts);
-    // .lens(new_lens);
     let layout = Flex::row()
-        .with_flex_child(list.with_spacing(20.).center(), 1.0)
+        .with_flex_child(list.with_spacing(20.).center(), 1.)
         .must_fill_main_axis(true)
         .expand_width();
 
@@ -91,14 +86,14 @@ pub fn contact_details() -> Box<dyn Widget<AppState>> {
         }
     })
     .with_text_size(20.0);
-    // let age = Label::new(|data: &AppState, _env: &Env| {
-    //     if let Some(idx) = data.selected {
-    //         format!("{}", data.contacts[idx].age)
-    //     } else {
-    //         "".to_string()
-    //     }
-    // })
-    // .with_text_size(20.0);
+    let age = Label::new(|data: &AppState, _env: &Env| {
+        if let Some(idx) = data.selected {
+            format!("{}", data.contacts[idx].age)
+        } else {
+            "".to_string()
+        }
+    })
+    .with_text_size(20.0);
     let favorite_food = Label::new(|data: &AppState, _env: &Env| {
         if let Some(idx) = data.selected {
             format!("{}", data.contacts[idx].favorite_food)
@@ -121,7 +116,7 @@ pub fn contact_details() -> Box<dyn Widget<AppState>> {
         .with_child(back_button)
         .with_child(name)
         .with_child(email)
-        // .with_child(age)
+        .with_child(age)
         .with_child(favorite_food)
         .with_child(edit_button)
         .must_fill_main_axis(true)
@@ -132,8 +127,6 @@ pub fn contact_details() -> Box<dyn Widget<AppState>> {
         .must_fill_main_axis(true)
         .expand_width();
 
-    // let lens = lens::Identity.index(0).in_arc();
-    // child.lens(lens.get(&contacts));
     Box::new(
         Container::new(layout)
             .background(Color::GRAY)
@@ -144,14 +137,9 @@ pub struct EditLens {}
 impl Lens<AppState, Contact> for EditLens {
     fn with<V, F: FnOnce(&Contact) -> V>(&self, data: &AppState, f: F) -> V {
         match data.selected {
-            Some(index) => f(&data.contacts[data.selected.unwrap()]),
+            Some(index) => f(&data.contacts[index]),
             None => {
-                let contact = Contact {
-                    name: "".to_string(),
-                    email: "".to_string(),
-                    favorite_food: "".to_string(),
-                    image: ImageBuf::empty(),
-                };
+                let contact = Contact::new("".to_string(), "".to_string(), 0, "".to_string());
                 f(&contact)
             }
         }
@@ -159,21 +147,17 @@ impl Lens<AppState, Contact> for EditLens {
     }
 
     fn with_mut<V, F: FnOnce(&mut Contact) -> V>(&self, data: &mut AppState, f: F) -> V {
-        // f(&mut data.contacts[data.selected.unwrap()])
         match data.selected {
             Some(index) => {
                 let contacts = Arc::make_mut(&mut data.contacts);
                 let something = f(&mut contacts[index]);
+                // dbg!(&contacts);
                 data.contacts = Arc::new(contacts.to_owned());
+                // dbg!(&data.contacts);
                 something
             }
             None => {
-                let mut contact = Contact {
-                    name: "".to_string(),
-                    email: "".to_string(),
-                    favorite_food: "".to_string(),
-                    image: ImageBuf::empty(),
-                };
+                let mut contact = Contact::new("".to_string(), "".to_string(), 0, "".to_string());
                 f(&mut contact)
             }
         }
@@ -186,18 +170,25 @@ pub fn contact_edit() -> Box<dyn Widget<AppState>> {
     });
     let name_textbox = TextBox::new();
     let email_textbox = TextBox::new();
-    // let age_textbox = TextBox::new();
+    let age_textbox = TextBox::new();
     let favorite_food_textbox = TextBox::new();
 
     let layout = Flex::column()
-        // .with_child(back_button)
         .with_child(name_textbox.lens(Contact::name))
         .with_child(email_textbox.lens(Contact::email))
-        // .with_child(age_textbox.lens(Contact::age))
+        .with_child(age_textbox.lens(Contact::age.map(
+            |age| age.to_string(),
+            |age, age_string| *age = age_string.parse().unwrap(),
+        )))
         .with_child(favorite_food_textbox.lens(Contact::favorite_food))
         .must_fill_main_axis(true)
-        .lens(EditLens {});
-    let layout = Flex::column().with_child(back_button).with_child(layout);
+        .lens(EditLens {})
+        .center()
+        .debug_paint_layout();
+    let layout = Flex::column()
+        .with_child(back_button)
+        .with_flex_child(layout, 1.0)
+        .expand_height();
     let container = Container::new(layout).background(Color::WHITE);
     // .controller(EditController);
 
@@ -289,19 +280,19 @@ impl Controller<AppState, Container<AppState>> for DetailsController {
         data: &mut AppState,
         env: &Env,
     ) {
-        match event {
-            Event::Command(selector) if selector.is(CONTACT_DETAIL) => {
-                let index = selector.get(CONTACT_DETAIL).unwrap().to_owned();
-                dbg!(&index);
-                // let contacts = data.contacts.clone();
-                let contacts = data.clone();
-                // let lens = lens::Identity.index(index).in_arc();
-                // child.lens(lens.get(&contacts));
-                // child.lens(ContactLens { index });
-                // dbg!(event);
-            }
-            _ => {}
-        }
+        // match event {
+        //     Event::Command(selector) if selector.is(CONTACT_DETAIL) => {
+        //         let index = selector.get(CONTACT_DETAIL).unwrap().to_owned();
+        //         dbg!(&index);
+        //         // let contacts = data.contacts.clone();
+        //         let contacts = data.clone();
+        //         // let lens = lens::Identity.index(index).in_arc();
+        //         // child.lens(lens.get(&contacts));
+        //         // child.lens(ContactLens { index });
+        //         // dbg!(event);
+        //     }
+        //     _ => {}
+        // }
         child.event(ctx, event, data, env);
     }
 
@@ -324,6 +315,7 @@ impl Controller<AppState, Container<AppState>> for DetailsController {
         data: &AppState,
         env: &Env,
     ) {
+        dbg!(old_data, data);
         child.update(ctx, old_data, data, env);
         // ctx.request_paint();
     }
