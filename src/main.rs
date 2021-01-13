@@ -9,7 +9,6 @@ use druid::{
     WindowDesc,
 };
 use druid::{Lens, LensExt};
-use druid_lens_compose::ComposeLens;
 
 mod navigator;
 mod view;
@@ -24,14 +23,14 @@ fn main() {
             email: "Billybob@gmail.com".to_string(),
             image: ImageBuf::empty(),
             favorite_food: "Curry".to_string(),
-            age: 39,
+            // age: 39,
         },
         Contact {
             name: "Waka waka".to_string(),
             email: "wakaka@gmail.com".to_string(),
             image: ImageBuf::empty(),
             favorite_food: "Fried Rice".to_string(),
-            age: 65,
+            // age: 65,
         },
     ];
     AppLauncher::with_window(window)
@@ -99,7 +98,7 @@ pub struct Contact {
     name: String,
     email: String,
     favorite_food: String,
-    age: u8,
+    // age: u8,
     image: ImageBuf,
 }
 
