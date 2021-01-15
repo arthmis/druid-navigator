@@ -1,4 +1,3 @@
-#![allow(warnings)]
 use std::{collections::HashMap, sync::Arc, thread::current};
 
 use druid::{
