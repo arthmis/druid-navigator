@@ -12,6 +12,7 @@ use druid::{widget::prelude::*, Point, Selector, WidgetPod};
 
 use crate::{AppState, View};
 
+pub const POP_VIEW: Selector<()> = Selector::new("Pop view");
 // Navigator will contain a vec of views, these will be pushed and popped
 // depending on whatever buttons or other navigational tools are used
 // whenever a new view is asked for a command is sent with a function
@@ -82,8 +83,22 @@ impl Widget<AppState> for Navigator {
             for view in self.state.iter_mut() {
                 view.event(ctx, event, data, env);
             }
+            match event {
+                Event::Command(selector) if selector.is(POP_VIEW) => {
+                    self.pop_view();
+                    ctx.children_changed();
+                }
+                _ => (),
+            }
         } else {
             self.state.last_mut().unwrap().event(ctx, event, data, env);
+            match event {
+                Event::Command(selector) if selector.is(POP_VIEW) => {
+                    self.pop_view();
+                    ctx.children_changed();
+                }
+                _ => (),
+            }
         }
     }
 

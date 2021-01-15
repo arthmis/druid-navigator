@@ -3,7 +3,8 @@ use std::{collections::HashMap, sync::Arc, thread::current};
 
 use druid::{
     widget::{
-        Button, Click, Container, ControllerHost, Flex, Label, ListIter, SizedBox, WidgetExt,
+        Button, Click, Container, ControllerHost, Flex, Label, ListIter, ScopeTransfer, SizedBox,
+        WidgetExt,
     },
     AppLauncher, Color, Command, Env, EventCtx, ImageBuf, Selector, Target, Widget, WidgetPod,
     WindowDesc,
@@ -16,6 +17,7 @@ mod view;
 use navigator::{Navigator, ViewController};
 fn main() {
     let window = WindowDesc::new(view::navigator).title("Navigation");
+    // let window = WindowDesc::new(view::contact_edit).title("Navigation");
 
     let contacts = vec![
         Contact {
@@ -36,7 +38,7 @@ fn main() {
     AppLauncher::with_window(window)
         .use_simple_logger()
         .launch(AppState {
-            app_name: "Navigator".to_string(),
+            app_name: "This is a paragraph about the Navigator.".to_string(),
             nav_state: Arc::new(vec![View::new("contacts".to_string())]),
             contacts: Arc::new(contacts),
             selected: None,
@@ -53,6 +55,60 @@ pub struct AppState {
     selected: Option<usize>,
 }
 
+#[derive(Clone, Data, Lens, Debug)]
+pub struct EditState {
+    contact: Contact,
+    index: usize,
+    was_saved: bool,
+}
+
+impl EditState {
+    pub fn new(data: AppState) -> Self {
+        let (contact, index) = if let Some(idx) = data.selected {
+            (data.contacts[idx].clone(), idx)
+        } else {
+            (
+                Contact::new("".to_owned(), "".to_owned(), 31, "".to_owned()),
+                0,
+            )
+        };
+        Self {
+            contact,
+            index,
+            was_saved: false,
+        }
+    }
+}
+pub struct EditTransfer;
+impl ScopeTransfer for EditTransfer {
+    type In = AppState;
+
+    type State = EditState;
+
+    fn read_input(&self, state: &mut Self::State, inner: &Self::In) {
+        // only read data in if the input was saved
+        // I don't know if this is correct, can there be data raced???
+        if state.was_saved {
+            let selected = inner.selected;
+            let idx = if let Some(idx) = selected { idx } else { 0 };
+            state.contact = inner.contacts[idx].clone();
+            state.index = idx;
+            state.was_saved = false;
+        }
+    }
+
+    fn write_back_input(&self, state: &Self::State, inner: &mut Self::In) {
+        // also don't know if this will work. Will the save button update the save first
+        // before this is called??
+        if state.was_saved {
+            let contacts = Arc::make_mut(&mut inner.contacts);
+            contacts[state.index] = state.contact.clone();
+            inner.contacts = Arc::new(contacts.to_owned());
+        }
+    }
+}
+
+// a little special implementation to give the list view all that it needs
 impl ListIter<(Arc<Vec<View>>, Contact, Option<usize>, usize)> for AppState {
     fn for_each(
         &self,
@@ -122,6 +178,8 @@ impl Contact {
     }
 }
 
+// This is the View type that Navigator will use. I want this to hold
+// a data type that can be hashed which should open navigator to use more types
 #[derive(Clone, Debug)]
 pub struct View {
     name: String,
@@ -131,6 +189,7 @@ impl View {
         Self { name }
     }
 }
+// This is currently not used
 impl ViewController for Arc<Vec<View>> {
     // fn add_view(&mut self, widget: impl Fn() -> Box<dyn Widget<AppState> + 'static>) {
     fn add_view(&mut self, view: View) {
