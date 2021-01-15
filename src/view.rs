@@ -4,7 +4,7 @@ use druid::{
     lens,
     widget::{
         Button, Click, Container, Controller, ControllerHost, Flex, Image, Label, LensWrap, List,
-        MainAxisAlignment, Painter, Scope, ScopePolicy, ScopeTransfer, SizedBox, TextBox,
+        MainAxisAlignment, Painter, Scope, ScopePolicy, ScopeTransfer, Scroll, SizedBox, TextBox,
     },
     Color, Command, Data, Env, Event, EventCtx, ImageBuf, Lens, LensExt, RenderContext, Selector,
     Target, UnitPoint, Widget, WidgetExt,
@@ -13,53 +13,53 @@ use druid::{
 use crate::{
     app_state_derived_lenses,
     navigator::{Navigator, ViewController, POP_VIEW},
-    AppState, Contact, EditState, EditTransfer, View,
+    AppState, Contact, EditState, EditTransfer, UiView,
 };
 
 // main page and contains list view of contacts
 pub fn contacts() -> Box<dyn Widget<AppState>> {
-    let list =
-        List::new(|| {
-            let image = Image::new(ImageBuf::empty());
-            let name_text = Label::new(
-                |(views, contact, _, _): &(Arc<Vec<View>>, Contact, Option<usize>, usize),
-                 _env: &_| { format!("{}", contact.name) },
-            )
-            .with_text_color(Color::BLACK)
-            .with_text_size(20.);
-            let email_text = Label::new(
-                |(views, contact, _, _): &(Arc<Vec<View>>, Contact, Option<usize>, usize),
-                 _env: &_| { format!("{}", contact.email) },
-            )
-            .with_text_color(Color::BLACK)
-            .with_text_size(20.);
-            let details = Flex::column().with_child(name_text).with_child(email_text);
-            let layout = Flex::row().with_child(image).with_child(details);
-            let layout = layout.on_click(|event, data, env| {
-                let new_views = Arc::make_mut(&mut data.0);
-                new_views.push(View::new("contact_details".to_string()));
-                data.0 = Arc::new(new_views.to_owned());
-                data.2 = Some(data.3);
-                event.submit_command(Command::new(CONTACT_DETAIL, data.3, Target::Auto));
-            });
-
-            layout.background(Painter::new(|ctx, data, env| {
-                let is_hot = ctx.is_hot();
-                let is_active = ctx.is_active();
-                let rect = ctx.size().to_rect();
-                let background_color = if is_active {
-                    Color::rgb8(0x88, 0x88, 0x88)
-                } else if is_hot {
-                    Color::rgb8(0xdd, 0xdd, 0xdd)
-                } else {
-                    Color::WHITE
-                };
-                ctx.stroke(rect, &background_color, 0.);
-                ctx.fill(rect, &background_color);
-            }))
+    let list = List::new(|| {
+        let image = Image::new(ImageBuf::empty());
+        let name_text = Label::new(
+            |(views, contact, _, _): &(Arc<Vec<UiView>>, Contact, Option<usize>, usize),
+             _env: &_| { format!("{}", contact.name) },
+        )
+        .with_text_color(Color::BLACK)
+        .with_text_size(20.);
+        let email_text = Label::new(
+            |(views, contact, _, _): &(Arc<Vec<UiView>>, Contact, Option<usize>, usize),
+             _env: &_| { format!("{}", contact.email) },
+        )
+        .with_text_color(Color::BLACK)
+        .with_text_size(20.);
+        let details = Flex::column().with_child(name_text).with_child(email_text);
+        let layout = Flex::row().with_child(image).with_child(details);
+        let layout = layout.on_click(|event, data, env| {
+            dbg!("clicking layout");
+            let new_views = Arc::make_mut(&mut data.0);
+            new_views.push(UiView::new("contact_details".to_string()));
+            data.0 = Arc::new(new_views.to_owned());
+            data.2 = Some(data.3);
+            event.submit_command(Command::new(CONTACT_DETAIL, data.3, Target::Auto));
         });
+
+        layout.background(Painter::new(|ctx, data, env| {
+            let is_hot = ctx.is_hot();
+            let is_active = ctx.is_active();
+            let rect = ctx.size().to_rect();
+            let background_color = if is_active {
+                Color::rgb8(0x88, 0x88, 0x88)
+            } else if is_hot {
+                Color::rgb8(0xdd, 0xdd, 0xdd)
+            } else {
+                Color::WHITE
+            };
+            ctx.stroke(rect, &background_color, 0.);
+            ctx.fill(rect, &background_color);
+        }))
+    });
     let layout = Flex::row()
-        .with_flex_child(list.with_spacing(20.).center(), 1.)
+        .with_flex_child(Scroll::new(list.with_spacing(20.)).center(), 1.)
         .must_fill_main_axis(true)
         .expand_width();
 
@@ -105,12 +105,12 @@ pub fn contact_details() -> Box<dyn Widget<AppState>> {
     .with_text_size(20.);
 
     let back_button = Button::new("Back").on_click(|event, data: &mut AppState, env| {
-        data.nav_state.pop_view();
+        data.pop_view();
     });
 
     let edit_button = Button::new("Edit").on_click(|event, data: &mut AppState, _| {
         let views = Arc::make_mut(&mut data.nav_state);
-        views.push(View::new("contact_edit".to_string()));
+        views.push(UiView::new("contact_edit".to_string()));
         data.nav_state = Arc::new(views.to_owned());
         event.submit_command(Command::new(
             CONTACT_EDIT,
@@ -169,7 +169,7 @@ pub fn contact_details() -> Box<dyn Widget<AppState>> {
 
 pub fn contact_edit() -> Box<dyn Widget<AppState>> {
     let back_button = Button::new("Back").on_click(|event, data: &mut AppState, env| {
-        data.nav_state.pop_view();
+        data.pop_view();
     });
     let name_textbox = TextBox::new().with_text_size(20.);
     let email_textbox = TextBox::new().with_text_size(20.);
@@ -253,7 +253,7 @@ const CONTACT_EDIT: Selector<usize> = Selector::new("contact_edit");
 
 // creates the navigator widget responsible for changing views
 pub fn navigator() -> impl Widget<AppState> {
-    Navigator::new("contacts".to_string(), Box::new(contacts))
-        .with_view_builder("contact_details".to_string(), contact_details)
-        .with_view_builder("contact_edit".to_string(), contact_edit)
+    Navigator::new(UiView::new("contacts".to_string()), Box::new(contacts))
+        .with_view_builder(UiView::new("contact_details".to_string()), contact_details)
+        .with_view_builder(UiView::new("contact_edit".to_string()), contact_edit)
 }

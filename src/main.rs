@@ -11,35 +11,22 @@ use druid::{
 };
 use druid::{Lens, LensExt};
 
+mod example_data;
 mod navigator;
 mod view;
 
-use navigator::{Navigator, ViewController};
+use navigator::{Navigator, View, ViewController};
 fn main() {
     let window = WindowDesc::new(view::navigator).title("Navigation");
     // let window = WindowDesc::new(view::contact_edit).title("Navigation");
 
-    let contacts = vec![
-        Contact {
-            name: "Billy Bob".to_string(),
-            email: "Billybob@gmail.com".to_string(),
-            image: ImageBuf::empty(),
-            favorite_food: "Curry".to_string(),
-            age: 39,
-        },
-        Contact {
-            name: "Waka waka".to_string(),
-            email: "wakaka@gmail.com".to_string(),
-            image: ImageBuf::empty(),
-            favorite_food: "Fried Rice".to_string(),
-            age: 65,
-        },
-    ];
+    let contacts = example_data::get_data();
+
     AppLauncher::with_window(window)
         .use_simple_logger()
         .launch(AppState {
             app_name: "This is a paragraph about the Navigator.".to_string(),
-            nav_state: Arc::new(vec![View::new("contacts".to_string())]),
+            nav_state: Arc::new(vec![UiView::new("contacts".to_string())]),
             contacts: Arc::new(contacts),
             selected: None,
         })
@@ -50,7 +37,7 @@ use druid::Data;
 #[derive(Clone, Data, Lens, Debug)]
 pub struct AppState {
     app_name: String,
-    nav_state: Arc<Vec<View>>,
+    nav_state: Arc<Vec<UiView>>,
     contacts: Arc<Vec<Contact>>,
     selected: Option<usize>,
 }
@@ -109,10 +96,10 @@ impl ScopeTransfer for EditTransfer {
 }
 
 // a little special implementation to give the list view all that it needs
-impl ListIter<(Arc<Vec<View>>, Contact, Option<usize>, usize)> for AppState {
+impl ListIter<(Arc<Vec<UiView>>, Contact, Option<usize>, usize)> for AppState {
     fn for_each(
         &self,
-        mut cb: impl FnMut(&(Arc<Vec<View>>, Contact, Option<usize>, usize), usize),
+        mut cb: impl FnMut(&(Arc<Vec<UiView>>, Contact, Option<usize>, usize), usize),
     ) {
         for (idx, contact) in self.contacts.iter().enumerate() {
             let nav_state = self.nav_state.clone();
@@ -122,7 +109,7 @@ impl ListIter<(Arc<Vec<View>>, Contact, Option<usize>, usize)> for AppState {
 
     fn for_each_mut(
         &mut self,
-        mut cb: impl FnMut(&mut (Arc<Vec<View>>, Contact, Option<usize>, usize), usize),
+        mut cb: impl FnMut(&mut (Arc<Vec<UiView>>, Contact, Option<usize>, usize), usize),
     ) {
         let mut any_shared_changed = false;
         for (idx, contact) in self.contacts.iter().enumerate() {
@@ -180,33 +167,38 @@ impl Contact {
 
 // This is the View type that Navigator will use. I want this to hold
 // a data type that can be hashed which should open navigator to use more types
-#[derive(Clone, Debug)]
-pub struct View {
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct UiView {
     name: String,
 }
-impl View {
+impl UiView {
     pub fn new(name: String) -> Self {
         Self { name }
     }
 }
-// This is currently not used
-impl ViewController for Arc<Vec<View>> {
+impl View for UiView {}
+
+impl ViewController<UiView> for AppState {
     // fn add_view(&mut self, widget: impl Fn() -> Box<dyn Widget<AppState> + 'static>) {
-    fn add_view(&mut self, view: View) {
-        let views = Arc::make_mut(self);
+    fn add_view(&mut self, view: UiView) {
+        let views: &mut Vec<UiView> = Arc::make_mut(&mut self.nav_state);
         views.push(view);
         let views = Arc::new(views.clone());
-        *self = views;
+        self.nav_state = views;
     }
 
     fn pop_view(&mut self) {
-        let views = Arc::make_mut(self);
+        let views = Arc::make_mut(&mut self.nav_state);
         views.pop();
         let views = Arc::new(views.clone());
-        *self = views;
+        self.nav_state = views;
     }
 
-    fn current_view(&self) -> &View {
-        self.last().unwrap()
+    fn current_view(&self) -> &UiView {
+        self.nav_state.last().unwrap()
+    }
+
+    fn len(&self) -> usize {
+        self.nav_state.len()
     }
 }
