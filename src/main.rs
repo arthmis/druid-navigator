@@ -1,20 +1,16 @@
-use std::{collections::HashMap, sync::Arc, thread::current};
+use std::sync::Arc;
 
+use druid::Lens;
 use druid::{
-    widget::{
-        Button, Click, Container, ControllerHost, Flex, Label, ListIter, ScopeTransfer, SizedBox,
-        WidgetExt,
-    },
-    AppLauncher, Color, Command, Env, EventCtx, ImageBuf, Selector, Target, Widget, WidgetPod,
-    WindowDesc,
+    widget::{ListIter, ScopeTransfer},
+    AppLauncher, ImageBuf, WindowDesc,
 };
-use druid::{Lens, LensExt};
 
 mod example_data;
 mod navigator;
 mod view;
 
-use navigator::{Navigator, View, ViewController};
+use navigator::{View, ViewController};
 fn main() {
     let window = WindowDesc::new(view::navigator).title("Navigation");
     // let window = WindowDesc::new(view::contact_edit).title("Navigation");
@@ -98,7 +94,10 @@ impl ScopeTransfer for EditTransfer {
 impl ListIter<(Arc<Vec<UiView>>, Contact, Option<usize>, usize)> for AppState {
     fn for_each(
         &self,
-        mut cb: impl FnMut(&(Arc<Vec<UiView>>, Contact, Option<usize>, usize), usize),
+        mut cb: impl FnMut(
+            &(Arc<Vec<UiView>>, Contact, Option<usize>, usize),
+            usize,
+        ),
     ) {
         for (idx, contact) in self.contacts.iter().enumerate() {
             let nav_state = self.nav_state.clone();
@@ -108,16 +107,15 @@ impl ListIter<(Arc<Vec<UiView>>, Contact, Option<usize>, usize)> for AppState {
 
     fn for_each_mut(
         &mut self,
-        mut cb: impl FnMut(&mut (Arc<Vec<UiView>>, Contact, Option<usize>, usize), usize),
+        mut cb: impl FnMut(
+            &mut (Arc<Vec<UiView>>, Contact, Option<usize>, usize),
+            usize,
+        ),
     ) {
         let mut any_shared_changed = false;
         for (idx, contact) in self.contacts.iter().enumerate() {
-            let mut d = (
-                self.nav_state.clone(),
-                contact.clone(),
-                self.selected.clone(),
-                idx,
-            );
+            let mut d =
+                (self.nav_state.clone(), contact.clone(), self.selected, idx);
 
             cb(&mut d, idx);
             if !any_shared_changed && !self.nav_state.same(&d.0) {
@@ -199,5 +197,9 @@ impl ViewController<UiView> for AppState {
 
     fn len(&self) -> usize {
         self.nav_state.len()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.nav_state.is_empty()
     }
 }
